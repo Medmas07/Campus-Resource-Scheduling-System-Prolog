@@ -6,17 +6,26 @@
     room_capacity/2,
     room_equipment/2,
     room_building/2,
-    room_energy/2
+    room_energy/2,
+    instructor_of/2,
+    instructor_available/2,
+    group_size_of/2,
+    building_max_energy/2,
+    group_size/2,
+    teaches/2,
+    availability/2,
+    building/2,
+    timeslot/1
 ]).
 
-course(programming_101, 2, 2, group_a, [computers, projector]).
-course(calculus_1, 3, 1, group_b, [whiteboard, projector]).
-course(physics_lab, 1, 3, group_c, [lab_benches, projector]).
-course(database_systems, 2, 2, group_a, [computers, projector]).
+course(programming_101, 2, 2, group_a, computers).
+course(calculus_1, 3, 1, group_b, projector).
+course(physics_lab, 1, 3, group_c, lab_benches).
+course(database_systems, 2, 2, group_a, computers).
 
-room(lab_alpha, 30, [computers, projector], engineering_block, 8).
-room(room_b201, 40, [whiteboard, projector], science_block, 5).
-room(room_c105, 25, [lab_benches, projector], science_block, 7).
+room(lab_alpha, 30, computers, engineering_block, 8).
+room(room_b201, 40, projector, science_block, 5).
+room(room_c105, 25, lab_benches, science_block, 7).
 
 building(engineering_block, 60).
 building(science_block, 50).
@@ -68,3 +77,15 @@ room_building(Room, Building) :-
 
 room_energy(Room, EnergyCost) :-
     room(Room, _, _, _, EnergyCost).
+
+instructor_of(Instructor, Course) :-
+    teaches(Instructor, Course).
+
+instructor_available(Instructor, Time) :-
+    availability(Instructor, Time).
+
+group_size_of(Group, Size) :-
+    group_size(Group, Size).
+
+building_max_energy(Building, MaxEnergy) :-
+    building(Building, MaxEnergy).
