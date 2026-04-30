@@ -1,5 +1,6 @@
 :- module(constraints, [
     generate_schedule/1,
+    all_courses/1,
     assign_all_courses/3,
     assign_sessions/4,
     valid_partial/1,
