@@ -311,6 +311,35 @@ npm install
 npm run dev
 ```
 
+## Run with Docker
+
+Pull and run:
+
+```bash
+docker pull medteck07/campus-scheduler:latest
+docker run -p 3001:3001 medteck07/campus-scheduler:latest
+```
+
+Then open:
+
+```text
+http://localhost:3001
+```
+
+Build locally:
+
+```bash
+docker build -t campus-scheduler .
+docker run -p 3001:3001 campus-scheduler
+```
+
+Using Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+
 ## Example Result
 
 For the current dataset, an optimal score is:
