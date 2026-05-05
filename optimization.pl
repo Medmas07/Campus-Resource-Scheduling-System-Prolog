@@ -1,30 +1,71 @@
 :- module(optimization, [
     score/2,
     scored_schedule/2,
+    energy_per_day/3,
+    load_imbalance/2,
     best_schedule/1,
     best_schedule_with_score/2
 ]).
 
 :- use_module(constraints).
+:- use_module(facts, [
+    room_energy/2
+]).
+:- use_module(library(lists), [max_list/2, min_list/2]).
 
-% Score represents total energy consumption.
+% Score = total energy + load balancing penalty.
 % Lower score = better schedule.
+% total_energy alone may be identical for many schedules, so imbalance is added.
 score(Schedule, Score) :-
-    total_energy(Schedule, Score).
+    total_energy(Schedule, Total),
+    load_imbalance(Schedule, Imbalance),
+    Score is Total + 10 * Imbalance.
 
-% Compute energy directly here to avoid an extra score/2 call.
+% Computes the energy consumed on one specific day.
+energy_per_day([], _Day, 0).
+energy_per_day([assign(_, _, Room, Time) | Rest], Day, Energy) :-
+    timeslot_day(Time, AssignmentDay),
+    energy_per_day(Rest, Day, RestEnergy),
+    (   AssignmentDay = Day
+    ->  room_energy(Room, RoomEnergy),
+        Energy is RoomEnergy + RestEnergy
+    ;   Energy = RestEnergy
+    ).
+
+% Extracts the day used by an assignment.
+schedule_day(assign(_, _, _, Time), Day) :-
+    timeslot_day(Time, Day).
+
+% Imbalance = max daily energy - min daily energy.
+% Smaller imbalance means energy demand is distributed more evenly.
+load_imbalance([], 0).
+load_imbalance(Schedule, Imbalance) :-
+    findall(Day,
+            (member(Assignment, Schedule),
+             schedule_day(Assignment, Day)),
+            Days0),
+    sort(Days0, Days),
+    findall(Energy,
+            (member(Day, Days),
+             energy_per_day(Schedule, Day, Energy)),
+            Energies),
+    max_list(Energies, MaxEnergy),
+    min_list(Energies, MinEnergy),
+    Imbalance is MaxEnergy - MinEnergy.
+
+% Generates a valid schedule and computes its optimization score.
 scored_schedule(Schedule, Score) :-
     generate_schedule(Schedule),
-    total_energy(Schedule, Score).
+    score(Schedule, Score).
 
-% setof collects all valid scored schedules and sorts them by Score.
-% Lower energy appears first because setof sorts pairs automatically.
+% setof sorts Score-Schedule pairs automatically.
+% The first result has the lowest score.
 best_schedule(BestSchedule) :-
-    setof(Score-S,
-          (generate_schedule(S), total_energy(S, Score)),
+    setof(Score-Schedule,
+          scored_schedule(Schedule, Score),
           [_BestScore-BestSchedule | _]).
 
 best_schedule_with_score(BestSchedule, BestScore) :-
-    setof(Score-S,
-          (generate_schedule(S), total_energy(S, Score)),
+    setof(Score-Schedule,
+          scored_schedule(Schedule, Score),
           [BestScore-BestSchedule | _]).
