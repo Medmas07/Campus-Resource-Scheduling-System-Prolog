@@ -1,8 +1,14 @@
 :- module(constraints, [
     generate_schedule/1,
     assign_all_courses/3,
+    assign_all_courses/4,
     assign_sessions/4,
+    assign_sessions/5,
     validate_insertion/2,
+    timeslot_day/2,
+    update_energy_state/3,
+    energy_ok/2,
+    total_energy/2,
     no_same_course_time/2,
     no_room_conflict/1,
     no_group_conflict/1,
@@ -20,9 +26,12 @@
     course_equipment/2,
     room_capacity/2,
     room_equipment/2,
+    room_building/2,
+    room_energy/2,
     instructor_of/2,
     instructor_available/2,
     group_size_of/2,
+    building_max_energy/2,
     timeslot/1
 ]).
 
@@ -107,9 +116,45 @@ validate_insertion(Assignment, Schedule) :-
     \+ instructor_conflicts_with(Assignment, Schedule),
     no_same_course_time(Assignment, Schedule).
 
+%   maps a timeslot atom to its day, e.g. monday_08_10 -> monday.
+timeslot_day(Time, Day) :-
+    sub_atom(Time, Length, _, _, '_'),
+    !,
+    sub_atom(Time, 0, Length, _, Day).
+
+%   Energy state structure: [energy(Building, Day, Value), ...].
+%   Updating adds the assignment's room energy to its building/day entry.
+update_energy_state(assign(_, _, Room, Time), State, NewState) :-
+    room_building(Room, Building),
+    timeslot_day(Time, Day),
+    room_energy(Room, Cost),
+    update_energy_entry(Building, Day, Cost, State, NewState).
+
+update_energy_entry(Building, Day, Cost, [], [energy(Building, Day, Cost)]).
+update_energy_entry(Building, Day, Cost, [energy(Building, Day, Current) | Rest],
+                    [energy(Building, Day, Updated) | Rest]) :-
+    !,
+    Updated is Current + Cost.
+update_energy_entry(Building, Day, Cost, [Entry | Rest], [Entry | UpdatedRest]) :-
+    update_energy_entry(Building, Day, Cost, Rest, UpdatedRest).
+
+%   Pruning condition: after update, building/day energy must stay under max.
+energy_ok(assign(_, _, Room, Time), State) :-
+    room_building(Room, Building),
+    timeslot_day(Time, Day),
+    building_max_energy(Building, MaxEnergy),
+    member(energy(Building, Day, UsedEnergy), State),
+    UsedEnergy =< MaxEnergy.
+
+total_energy([], 0).
+total_energy([assign(_, _, Room, _) | Rest], Total) :-
+    room_energy(Room, Cost),
+    total_energy(Rest, RestTotal),
+    Total is Cost + RestTotal.
+
 generate_schedule(Schedule) :-
     all_courses(Courses),
-    assign_all_courses(Courses, [], Schedule),
+    assign_all_courses(Courses, [], [], Schedule),
     no_room_conflict(Schedule),
     no_group_conflict(Schedule),
     no_instructor_conflict(Schedule),
@@ -120,14 +165,30 @@ generate_schedule(Schedule) :-
 
 assign_all_courses([], Schedule, Schedule).
 assign_all_courses([Course | Rest], Partial, Schedule) :-
-    assign_sessions(Course, 1, Partial, Updated),
-    assign_all_courses(Rest, Updated, Schedule).
+    assign_all_courses([Course | Rest], Partial, [], Schedule).
+
+assign_all_courses(Courses, Partial, State, Schedule) :-
+    assign_all_courses(Courses, Partial, State, Schedule, _FinalState).
+
+assign_all_courses([], Schedule, State, Schedule, State).
+assign_all_courses([Course | Rest], Partial, State, Schedule, FinalState) :-
+    assign_sessions(Course, 1, Partial, State, Updated, UpdatedState),
+    assign_all_courses(Rest, Updated, UpdatedState, Schedule, FinalState).
 
 %   bruteforce (+ backtracking) assignments for one course.
 assign_sessions(Course, SessionIndex, Partial, Partial) :-
     course_sessions(Course, TotalSessions),
     SessionIndex > TotalSessions.
 assign_sessions(Course, SessionIndex, Partial, Schedule) :-
+    assign_sessions(Course, SessionIndex, Partial, [], Schedule).
+
+assign_sessions(Course, SessionIndex, Partial, State, Schedule) :-
+    assign_sessions(Course, SessionIndex, Partial, State, Schedule, _FinalState).
+
+assign_sessions(Course, SessionIndex, Partial, State, Partial, State) :-
+    course_sessions(Course, TotalSessions),
+    SessionIndex > TotalSessions.
+assign_sessions(Course, SessionIndex, Partial, State, Schedule, FinalState) :-
     course_sessions(Course, TotalSessions),
     SessionIndex =< TotalSessions,
 
@@ -153,6 +214,9 @@ assign_sessions(Course, SessionIndex, Partial, Schedule) :-
     % Validate with other assignments
     validate_insertion(Assignment, Partial),
 
+    update_energy_state(Assignment, State, NewState),
+    energy_ok(Assignment, NewState),
+
     % Next assignment for the same course
     NextIndex is SessionIndex + 1,
-    assign_sessions(Course, NextIndex, [Assignment | Partial], Schedule).
+    assign_sessions(Course, NextIndex, [Assignment | Partial], NewState, Schedule, FinalState).
