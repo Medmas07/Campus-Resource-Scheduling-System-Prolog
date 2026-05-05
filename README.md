@@ -198,6 +198,45 @@ Run the optimizer:
 ?- solve(Schedule, Score).
 ```
 
+## Web Interface
+
+The project includes a minimal Node.js backend and React/Vite frontend. SWI-Prolog must be installed and available on the system path as `swipl`.
+
+Run the backend from the project root:
+
+```bash
+npm install --prefix backend
+node backend/server.js
+```
+
+The backend starts on:
+
+```text
+http://localhost:3001
+```
+
+It exposes:
+
+```text
+GET /api/solve
+```
+
+Run the frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend starts on the Vite development URL, usually:
+
+```text
+http://localhost:5173
+```
+
+Click `Run Solver` to call the backend, execute SWI-Prolog, and display the optimized schedule.
+
 ## Example Result
 
 For the current dataset, an optimal score is:
