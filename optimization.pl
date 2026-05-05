@@ -21,8 +21,8 @@ score(Schedule, Score) :-
 % Computes the energy consumed on one specific day.
 energy_per_day([], _Day, 0).
 energy_per_day([Assignment | Rest], Day, Energy) :-
-    Assignment = assign(_, _, _, Time),
-    timeslot_day(Time, AssignmentDay),
+    Assignment = assign(_, _, _, StartTime, _),
+    timeslot_day(StartTime, AssignmentDay),
     energy_per_day(Rest, Day, RestEnergy),
     (   AssignmentDay = Day
     ->  assignment_energy(Assignment, AssignmentEnergy),
@@ -31,8 +31,8 @@ energy_per_day([Assignment | Rest], Day, Energy) :-
     ).
 
 % Extracts the day used by an assignment.
-schedule_day(assign(_, _, _, Time), Day) :-
-    timeslot_day(Time, Day).
+schedule_day(assign(_, _, _, StartTime, _), Day) :-
+    timeslot_day(StartTime, Day).
 
 % Imbalance = max daily energy - min daily energy.
 % Smaller imbalance means energy demand is distributed more evenly.

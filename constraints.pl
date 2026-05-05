@@ -4,6 +4,8 @@
     assign_sessions/5,
     validate_insertion/2,
     timeslot_day/2,
+    consecutive_slots/3,
+    intersects/2,
     update_energy_state/3,
     energy_ok/2,
     assignment_energy/2,
@@ -32,32 +34,45 @@
     instructor_available/2,
     group_size_of/2,
     building_max_energy/2,
-    timeslot/1
+    timeslot/1,
+    next_slot/2
 ]).
 
 %% Conflicts Detectors
 
-room_conflicts_with(assign(_, _, Room, Time), [assign(_, _, Room, Time) | _]) :-
+intersects([Slot | _], Slots) :-
+    member(Slot, Slots),
+    !.
+intersects([_ | Rest], Slots) :-
+    intersects(Rest, Slots).
+
+room_conflicts_with(assign(_, _, Room, _, Slots), [assign(_, _, Room, _, OtherSlots) | _]) :-
+    intersects(Slots, OtherSlots),
     !.
 room_conflicts_with(Assignment, [_ | Rest]) :-
     room_conflicts_with(Assignment, Rest).
 
-group_conflicts_with(assign(Course, _, _, Time), [assign(OtherCourse, _, _, Time) | _]) :-
+group_conflicts_with(assign(Course, _, _, _, Slots), [assign(OtherCourse, _, _, _, OtherSlots) | _]) :-
     course_group(Course, Group),
     course_group(OtherCourse, Group),
+    intersects(Slots, OtherSlots),
     !.
 group_conflicts_with(Assignment, [_ | Rest]) :-
     group_conflicts_with(Assignment, Rest).
 
-instructor_conflicts_with(assign(Course, _, _, Time), [assign(OtherCourse, _, _, Time) | _]) :-
+instructor_conflicts_with(assign(Course, _, _, _, Slots), [assign(OtherCourse, _, _, _, OtherSlots) | _]) :-
     instructor_of(Instructor, Course),
     instructor_of(Instructor, OtherCourse),
+    intersects(Slots, OtherSlots),
     !.
 instructor_conflicts_with(Assignment, [_ | Rest]) :-
     instructor_conflicts_with(Assignment, Rest).
 
-no_same_course_time(assign(Course, _, _, Time), Schedule) :-
-    \+ member(assign(Course, _, _, Time), Schedule).
+no_same_course_time(assign(Course, _, _, _, Slots), Schedule) :-
+    \+ (
+        member(assign(Course, _, _, _, OtherSlots), Schedule),
+        intersects(Slots, OtherSlots)
+    ).
 
 no_room_conflict([]).
 no_room_conflict([Assignment | Rest]) :-
@@ -81,7 +96,7 @@ no_same_course_conflict([Assignment | Rest]) :-
     no_same_course_conflict(Rest).
 
 capacity_ok([]).
-capacity_ok([assign(Course, _, Room, _) | Rest]) :-
+capacity_ok([assign(Course, _, Room, _, _) | Rest]) :-
     course_group(Course, Group),
     group_size_of(Group, GroupSize),
     room_capacity(Room, RoomCapacity),
@@ -90,16 +105,17 @@ capacity_ok([assign(Course, _, Room, _) | Rest]) :-
 
 % validates equipments
 equipment_ok([]).
-equipment_ok([assign(Course, _, Room, _) | Rest]) :-
+equipment_ok([assign(Course, _, Room, _, _) | Rest]) :-
     course_equipment(Course, Equipment),
     room_equipment(Room, Equipment),
     equipment_ok(Rest).
 
 %   validates teachers' availabilities
 availability_ok([]).
-availability_ok([assign(Course, _, _, Time) | Rest]) :-
+availability_ok([assign(Course, _, _, _, OccupiedSlots) | Rest]) :-
     instructor_of(Instructor, Course),
-    instructor_available(Instructor, Time),
+    forall(member(Slot, OccupiedSlots),
+           instructor_available(Instructor, Slot)),
     availability_ok(Rest).
 
 %   validates assignments for one course.
@@ -107,7 +123,7 @@ availability_ok([assign(Course, _, _, Time) | Rest]) :-
 %   Internal debugging helper; generation already enforces session creation.
 course_assignments_ok(Course, Schedule) :-
     course_sessions(Course, Total),
-    findall(SessionIndex, member(assign(Course, SessionIndex, _, _), Schedule), Sessions),
+    findall(SessionIndex, member(assign(Course, SessionIndex, _, _, _), Schedule), Sessions),
     length(Sessions, Total).
 
 %   validates assignment 
@@ -117,20 +133,29 @@ validate_insertion(Assignment, Schedule) :-
     \+ instructor_conflicts_with(Assignment, Schedule),
     no_same_course_time(Assignment, Schedule).
 
-%   maps a timeslot atom to its day, e.g. monday_08_10 -> monday.
+%   maps a timeslot atom to its day, e.g. monday_08_09 -> monday.
 timeslot_day(Time, Day) :-
     sub_atom(Time, Before, 1, _, '_'),
     !,
     sub_atom(Time, 0, Before, _, Day).
 timeslot_day(Time, Time).
 
+%   Builds the list of real consecutive slots occupied by a session.
+consecutive_slots(StartTime, 1, [StartTime]) :-
+    timeslot(StartTime).
+consecutive_slots(StartTime, Duration, [StartTime | Rest]) :-
+    Duration > 1,
+    next_slot(StartTime, NextTime),
+    NextDuration is Duration - 1,
+    consecutive_slots(NextTime, NextDuration, Rest).
+
 %   State = list of energy(Building, Day, Value).
 %   Energy state structure: [energy(Building, Day, Value), ...].
 %   Updating adds the full assignment energy to its building/day entry.
 update_energy_state(Assignment, State, NewState) :-
-    Assignment = assign(_, _, Room, Time),
+    Assignment = assign(_, _, Room, StartTime, _),
     room_building(Room, Building),
-    timeslot_day(Time, Day),
+    timeslot_day(StartTime, Day),
     assignment_energy(Assignment, Cost),
     update_energy_entry(Building, Day, Cost, State, NewState).
 
@@ -143,9 +168,9 @@ update_energy_entry(Building, Day, Cost, [Entry | Rest], [Entry | UpdatedRest]) 
     update_energy_entry(Building, Day, Cost, Rest, UpdatedRest).
 
 %   Pruning condition: after update, building/day energy must stay under max.
-energy_ok(assign(_, _, Room, Time), State) :-
+energy_ok(assign(_, _, Room, StartTime, _), State) :-
     room_building(Room, Building),
-    timeslot_day(Time, Day),
+    timeslot_day(StartTime, Day),
     building_max_energy(Building, MaxEnergy),
     energy_used(Building, Day, State, UsedEnergy),
     UsedEnergy =< MaxEnergy.
@@ -157,7 +182,7 @@ energy_used(Building, Day, State, UsedEnergy) :-
 energy_used(_, _, _, 0).
 
 %   Assignment energy includes course duration, so longer sessions cost more.
-assignment_energy(assign(Course, _, Room, _), Energy) :-
+assignment_energy(assign(Course, _, Room, _, _), Energy) :-
     course_duration(Course, Duration),
     room_energy(Room, Cost),
     Energy is Duration * Cost.
@@ -201,9 +226,12 @@ assign_sessions(Course, SessionIndex, Partial, _State, Partial) :-
 assign_sessions(Course, SessionIndex, Partial, State, Schedule) :-
     course_sessions(Course, TotalSessions),
     SessionIndex =< TotalSessions,
+    course_duration(Course, Duration),
 
     % Local constraints
     % Equipment
+    timeslot(StartTime),
+    consecutive_slots(StartTime, Duration, OccupiedSlots),
     course_equipment(Course, Equipment),
     room_equipment(Room, Equipment),
 
@@ -215,10 +243,10 @@ assign_sessions(Course, SessionIndex, Partial, State, Schedule) :-
     
     % Instructor availability
     instructor_of(Instructor, Course),
-    instructor_available(Instructor, Time),
-    timeslot(Time),
+    forall(member(Slot, OccupiedSlots),
+           instructor_available(Instructor, Slot)),
 
-    Assignment = assign(Course, SessionIndex, Room, Time),
+    Assignment = assign(Course, SessionIndex, Room, StartTime, OccupiedSlots),
 
     % Global constraints
     % Validate with other assignments

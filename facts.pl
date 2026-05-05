@@ -16,7 +16,8 @@
     teaches/2,
     availability/2,
     building/2,
-    timeslot/1
+    timeslot/1,
+    next_slot/2
 ]).
 
 %% Data Structures
@@ -36,11 +37,25 @@ building(engineering_block, 60).
 building(science_block    , 50).
 
 % day_start_end
-timeslot(   monday_08_10).
-timeslot(   monday_10_12).
-timeslot(  tuesday_08_10).
-timeslot(  tuesday_10_12).
-timeslot(wednesday_14_16).
+timeslot(   monday_08_09).
+timeslot(   monday_09_10).
+timeslot(   monday_10_11).
+timeslot(   monday_11_12).
+timeslot(  tuesday_08_09).
+timeslot(  tuesday_09_10).
+timeslot(  tuesday_10_11).
+timeslot(  tuesday_11_12).
+timeslot(wednesday_14_15).
+timeslot(wednesday_15_16).
+
+% Atomic slots are ordered only within the same day.
+next_slot(   monday_08_09,    monday_09_10).
+next_slot(   monday_09_10,    monday_10_11).
+next_slot(   monday_10_11,    monday_11_12).
+next_slot(  tuesday_08_09,   tuesday_09_10).
+next_slot(  tuesday_09_10,   tuesday_10_11).
+next_slot(  tuesday_10_11,   tuesday_11_12).
+next_slot(wednesday_14_15, wednesday_15_16).
 
 group_size(group_a, 28).
 group_size(group_b, 35).
@@ -52,14 +67,24 @@ teaches(dr_sami,    programming_101 ).
 teaches(dr_ali,     calculus_1      ).
 teaches(dr_skander, physics_lab     ).
 
-availability(dr_sami   ,    monday_08_10).
-availability(dr_sami   ,   tuesday_08_10).
-availability(dr_ali    ,    monday_10_12).
-availability(dr_ali    , wednesday_14_16).
-availability(dr_skander,   tuesday_10_12).
-availability(dr_skander, wednesday_14_16).
-% availability(prof_anwer,    monday_08_10).
-% availability(prof_anwer,   tuesday_10_12).
+availability(dr_sami   ,    monday_08_09).
+availability(dr_sami   ,    monday_09_10).
+availability(dr_sami   ,   tuesday_08_09).
+availability(dr_sami   ,   tuesday_09_10).
+availability(dr_ali    ,    monday_10_11).
+availability(dr_ali    ,    monday_11_12).
+availability(dr_ali    , wednesday_14_15).
+availability(dr_ali    , wednesday_15_16).
+% physics_lab has duration 3, so dr_skander needs three consecutive atomic slots.
+availability(dr_skander,   tuesday_09_10).
+availability(dr_skander,   tuesday_10_11).
+availability(dr_skander,   tuesday_11_12).
+availability(dr_skander, wednesday_14_15).
+availability(dr_skander, wednesday_15_16).
+% availability(prof_anwer,    monday_08_09).
+% availability(prof_anwer,    monday_09_10).
+% availability(prof_anwer,   tuesday_10_11).
+% availability(prof_anwer,   tuesday_11_12).
 
 
 
