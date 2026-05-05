@@ -20,19 +20,22 @@
 ]).
 
 %% Data Structures
-
+% course(Course, Sessions, Duration, Group, Equipment)
 course(programming_101 , 2, 2, group_a, computers  ).
 course(calculus_1      , 1, 1, group_b, projector  ).
 course(physics_lab     , 1, 3, group_c, lab_benches).
 % course(database_systems, 2, 2, group_a, computers  ).
 
+% room(Room, Capacity, Equipment, Building, EnergyCost)
 room(lab_alpha, 30, computers  , engineering_block, 8).
 room(room_b201, 40, projector  ,     science_block, 5).
 room(room_c105, 25, lab_benches,     science_block, 7).
 
+% building(Building, MaxEnergy)
 building(engineering_block, 60).
 building(science_block    , 50).
 
+% day_start_end
 timeslot(   monday_08_10).
 timeslot(   monday_10_12).
 timeslot(  tuesday_08_10).
