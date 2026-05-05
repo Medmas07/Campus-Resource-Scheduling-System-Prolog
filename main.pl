@@ -5,7 +5,12 @@
 ]).
 
 :- use_module(library(http/json)).
+% Use generated facts when they are preloaded; otherwise load the default facts.pl.
+:- if(current_module(facts)).
+:- true.
+:- else.
 :- use_module(facts).
+:- endif.
 :- use_module(constraints).
 :- use_module(optimization).
 
@@ -18,17 +23,20 @@ solve(BestSchedule) :-
 
 % JSON bridge used by the Node.js backend.
 print_solution_json :-
-    solve(Schedule, Score),
-    total_energy(Schedule, TotalEnergy),
-    load_imbalance(Schedule, LoadImbalance),
-    room_usage_imbalance(Schedule, RoomUsageImbalance),
-    schedule_to_json(Schedule, JsonSchedule),
-    json_write(current_output,
-               json([score=Score,
-                     totalEnergy=TotalEnergy,
-                     loadImbalance=LoadImbalance,
-                     roomUsageImbalance=RoomUsageImbalance,
-                     schedule=JsonSchedule])),
+    (   solve(Schedule, Score)
+    ->  total_energy(Schedule, TotalEnergy),
+        load_imbalance(Schedule, LoadImbalance),
+        room_usage_imbalance(Schedule, RoomUsageImbalance),
+        schedule_to_json(Schedule, JsonSchedule),
+        json_write(current_output,
+                   json([score=Score,
+                         totalEnergy=TotalEnergy,
+                         loadImbalance=LoadImbalance,
+                         roomUsageImbalance=RoomUsageImbalance,
+                         schedule=JsonSchedule]))
+    ;   json_write(current_output,
+                   json([error='No valid schedule found']))
+    ),
     nl.
 
 schedule_to_json([], []).

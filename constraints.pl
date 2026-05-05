@@ -20,6 +20,24 @@
     availability_ok/1
 ]).
 
+% Import from an already-loaded generated facts module, otherwise load facts.pl.
+:- if(current_module(facts)).
+:- import(facts:all_courses/1).
+:- import(facts:course_sessions/2).
+:- import(facts:course_duration/2).
+:- import(facts:course_group/2).
+:- import(facts:course_equipment/2).
+:- import(facts:room_capacity/2).
+:- import(facts:room_equipment/2).
+:- import(facts:room_building/2).
+:- import(facts:room_energy/2).
+:- import(facts:instructor_of/2).
+:- import(facts:instructor_available/2).
+:- import(facts:group_size_of/2).
+:- import(facts:building_max_energy/2).
+:- import(facts:timeslot/1).
+:- import(facts:next_slot/2).
+:- else.
 :- use_module(facts, [
     all_courses/1,
     course_sessions/2,
@@ -37,6 +55,7 @@
     timeslot/1,
     next_slot/2
 ]).
+:- endif.
 
 %% Conflicts Detectors
 

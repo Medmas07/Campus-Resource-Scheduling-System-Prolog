@@ -21,6 +21,7 @@ pnpm-debug.log*
 # SWI-Prolog generated files
 *.qlf
 .prolog_history
+generated_facts.pl
 
 # LaTeX build artifacts
 *.aux

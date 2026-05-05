@@ -237,6 +237,80 @@ http://localhost:5173
 
 Click `Run Solver` to call the backend, execute SWI-Prolog, and display the optimized schedule.
 
+## Dataset Input from Frontend
+
+The frontend accepts custom scheduling datasets as JSON. The backend validates the JSON, sanitizes identifiers into safe Prolog atoms, converts the dataset into `generated_facts.pl`, and runs the same solver against the generated knowledge base. The original `facts.pl` file is not overwritten.
+
+The result is returned as JSON and displayed as metric cards plus an academic timetable grid.
+
+Example dataset:
+
+```json
+{
+  "courses": [
+    {
+      "id": "programming_101",
+      "sessions": 2,
+      "duration": 2,
+      "group": "group_a",
+      "equipment": "computers",
+      "instructor": "dr_sami"
+    }
+  ],
+  "rooms": [
+    {
+      "id": "lab_alpha",
+      "capacity": 30,
+      "equipment": "computers",
+      "building": "engineering_block",
+      "energy": 8
+    }
+  ],
+  "buildings": [
+    {
+      "id": "engineering_block",
+      "maxEnergy": 60
+    }
+  ],
+  "groups": [
+    {
+      "id": "group_a",
+      "size": 28
+    }
+  ],
+  "timeslots": [
+    "monday_08_09",
+    "monday_09_10",
+    "monday_10_11"
+  ],
+  "nextSlots": [
+    ["monday_08_09", "monday_09_10"],
+    ["monday_09_10", "monday_10_11"]
+  ],
+  "availability": [
+    {
+      "instructor": "dr_sami",
+      "slots": ["monday_08_09", "monday_09_10"]
+    }
+  ]
+}
+```
+
+Run the backend from the project root:
+
+```bash
+npm install --prefix backend
+node backend/server.js
+```
+
+Run the frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
 ## Example Result
 
 For the current dataset, an optimal score is:
