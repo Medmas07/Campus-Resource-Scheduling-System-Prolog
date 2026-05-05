@@ -3,12 +3,15 @@
     assign_all_courses/3,
     assign_sessions/4,
     validate_insertion/2,
+    no_same_course_time/2,
     no_room_conflict/1,
     no_group_conflict/1,
+    no_instructor_conflict/1,
+    no_same_course_conflict/1,
     capacity_ok/1,
     equipment_ok/1,
     availability_ok/1
-    ]).
+]).
 
 :- use_module(facts, [
     all_courses/1,
@@ -44,16 +47,9 @@ instructor_conflicts_with(assign(Course, _, _, Time), [assign(OtherCourse, _, _,
 instructor_conflicts_with(Assignment, [_ | Rest]) :-
     instructor_conflicts_with(Assignment, Rest).
 
+no_same_course_time(assign(Course, _, _, Time), Schedule) :-
+    \+ member(assign(Course, _, _, Time), Schedule).
 
-
-
-
-
-
-
-%% Validators
-
-% validattes rooms availabilites
 no_room_conflict([]).
 no_room_conflict([Assignment | Rest]) :-
     \+ room_conflicts_with(Assignment, Rest),
@@ -65,7 +61,16 @@ no_group_conflict([Assignment | Rest]) :-
     \+ group_conflicts_with(Assignment, Rest),
     no_group_conflict(Rest).
 
-% validates capacities
+no_instructor_conflict([]).
+no_instructor_conflict([Assignment | Rest]) :-
+    \+ instructor_conflicts_with(Assignment, Rest),
+    no_instructor_conflict(Rest).
+
+no_same_course_conflict([]).
+no_same_course_conflict([Assignment | Rest]) :-
+    no_same_course_time(Assignment, Rest),
+    no_same_course_conflict(Rest).
+
 capacity_ok([]).
 capacity_ok([assign(Course, _, Room, _) | Rest]) :-
     course_group(Course, Group),
@@ -99,26 +104,20 @@ course_assignments_ok(Course, Schedule) :-
 validate_insertion(Assignment, Schedule) :-
     \+ room_conflicts_with(Assignment, Schedule),
     \+ group_conflicts_with(Assignment, Schedule),
-    % \+ instructor_conflicts_with(Assignment, Schedule), % solves the problem of a teacher having 2 courses at the same time.
-    true.
+    \+ instructor_conflicts_with(Assignment, Schedule),
+    no_same_course_time(Assignment, Schedule).
 
-
-
-
-
-
-
-
-
-%% Solvers
-
-%   the main solver.
-%   Schedule : list of assignments.
 generate_schedule(Schedule) :-
     all_courses(Courses),
-    assign_all_courses(Courses, [], Schedule).
+    assign_all_courses(Courses, [], Schedule),
+    no_room_conflict(Schedule),
+    no_group_conflict(Schedule),
+    no_instructor_conflict(Schedule),
+    no_same_course_conflict(Schedule),
+    capacity_ok(Schedule),
+    equipment_ok(Schedule),
+    availability_ok(Schedule).
 
-%   bruteforce (+ backtracking) assignments for all courses.
 assign_all_courses([], Schedule, Schedule).
 assign_all_courses([Course | Rest], Partial, Schedule) :-
     assign_sessions(Course, 1, Partial, Updated),
@@ -145,7 +144,7 @@ assign_sessions(Course, SessionIndex, Partial, Schedule) :-
     
     % Instructor availability
     instructor_of(Instructor, Course),
-    instructor_available(Instructor, Time), % potential problem (solved_above) : instructor can be teaching other courses
+    instructor_available(Instructor, Time),
     timeslot(Time),
 
     Assignment = assign(Course, SessionIndex, Room, Time),
