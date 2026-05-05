@@ -1,382 +1,269 @@
-# Prolog Course Scheduling System
+# Intelligent Energy-Aware Campus Resource Scheduling System
 
-## Project Overview
+## Overview
 
-This project is a Prolog-based course scheduling system. Its goal is to build a valid timetable by assigning course sessions to rooms and time slots while respecting scheduling constraints.
+This project is a Prolog declarative reasoning engine that generates optimized weekly schedules for university courses under room, group, capacity, equipment, instructor availability, temporal, energy, and fairness constraints.
 
-The scheduler works as a constraint satisfaction problem. It uses Prolog backtracking to try assignments and reject invalid partial schedules as early as possible.
+The system models scheduling as a Constraint Satisfaction Problem (CSP). Candidate schedules are built recursively, and invalid partial assignments are rejected as early as possible through Prolog failure and backtracking. The current implementation supports real multi-slot course durations, overlap-based conflict detection, energy-aware pruning, and multi-criteria optimization.
 
-The system checks constraints such as:
+## Architecture
 
-- room conflicts
-- student group conflicts
-- room capacity
-- equipment compatibility
-- instructor availability
+The project is organized into four Prolog modules:
 
-The main entry point is:
+- `facts.pl`  
+  Knowledge base: courses, rooms, buildings, groups, instructors, atomic timeslots, `next_slot/2`, and instructor availability.
 
-```prolog
-generate_schedule(Schedule).
+- `constraints.pl`  
+  CSP engine: recursive generation, multi-slot duration handling, overlap-based hard constraints, and energy state propagation.
+
+- `optimization.pl`  
+  Multi-criteria evaluation and Branch and Bound optimization using `best_solution/2`.
+
+- `main.pl`  
+  Final entry point through `solve/1` and `solve/2`.
+
+```mermaid
+flowchart TD
+    A[facts.pl: Knowledge Base] --> B[constraints.pl: Recursive CSP Generator]
+    B --> C[Energy State Propagation]
+    C --> D[optimization.pl: Scoring + Branch and Bound]
+    D --> E[main.pl: solve/2]
 ```
 
-If the facts in the knowledge base are satisfiable, the system returns a schedule. If they are not satisfiable, Prolog returns `false`. This is expected behavior and means no valid schedule exists for the current input data.
+## Data Model
 
-## File Structure
-
-`facts.pl`
-
-- Defines the knowledge base.
-- Contains facts for courses, rooms, buildings, time slots, group sizes, instructors, and availability.
-- Provides accessor predicates used by the scheduling engine.
-
-`constraints.pl`
-
-- Defines the scheduling logic.
-- Builds schedules incrementally using recursive assignment.
-- Applies constraints during generation so invalid partial schedules fail early.
-
-Main predicate:
+The knowledge base uses the following core predicates:
 
 ```prolog
-generate_schedule(Schedule).
+course(Course, Sessions, Duration, Group, Equipment).
+room(Room, Capacity, Equipment, Building, EnergyCost).
+building(Building, MaxEnergy).
+timeslot(Time).
+next_slot(Time1, Time2).
+group_size(Group, Size).
+teaches(Instructor, Course).
+availability(Instructor, Time).
 ```
 
-## How the Code Works
-
-### 1. `generate_schedule/1`
-
-This is the main predicate used to request a schedule.
+The generated schedule uses the assignment representation:
 
 ```prolog
-?- generate_schedule(Schedule).
+assign(Course, SessionIndex, Room, StartTime, OccupiedSlots)
 ```
-
-It first collects the list of courses and then starts recursive assignment.
-
-### 2. `all_courses/1`
-
-This predicate gathers all course identifiers from the knowledge base.
 
 Example:
 
 ```prolog
-?- all_courses(Courses).
+assign(programming_101, 1, lab_alpha, monday_08_09,
+       [monday_08_09, monday_09_10])
 ```
 
-It returns a list of all courses that must be scheduled.
+This means:
 
-### 3. `assign_all_courses/3`
+- `programming_101` session 1 is assigned to `lab_alpha`.
+- The session starts at `monday_08_09`.
+- Because the course duration is 2, it occupies two consecutive atomic slots.
 
-This predicate processes the course list one course at a time.
+## Multi-Slot Duration
+
+Course duration is interpreted as the number of consecutive atomic timeslots occupied by each session.
+
+The predicate `consecutive_slots/3` builds the occupied slot list:
 
 ```prolog
-assign_all_courses(Courses, PartialSchedule, FinalSchedule)
+consecutive_slots(monday_08_09, 1, [monday_08_09]).
+consecutive_slots(monday_08_09, 2, [monday_08_09, monday_09_10]).
+consecutive_slots(monday_08_09, 3, [monday_08_09, monday_09_10, monday_10_11]).
 ```
 
-Behavior:
+The temporal adjacency relation is defined by `next_slot/2`. If there are not enough consecutive slots from a start time, the predicate fails.
 
-- if the course list is empty, the schedule is complete
-- otherwise, it schedules all sessions of the first course
-- then it recursively continues with the remaining courses
+Conflicts are checked by intersecting occupied slot lists rather than comparing only a single start time.
 
-### 4. Recursive Session Assignment
+```mermaid
+flowchart LR
+    A[StartTime: monday_08_09] --> B[next_slot/2]
+    B --> C[monday_09_10]
+    C --> D[OccupiedSlots: monday_08_09, monday_09_10]
+    D --> E[Conflict checks use slot-list intersection]
+```
 
-For each course, `assign_sessions/4` assigns every session index using the representation:
+## Hard Constraints
+
+The CSP engine preserves the following hard constraints:
+
+- `no_room_conflict/1`  
+  A room cannot host overlapping assignments.
+
+- `no_group_conflict/1`  
+  A student group cannot attend overlapping courses.
+
+- `no_instructor_conflict/1`  
+  An instructor cannot teach overlapping courses.
+
+- `no_same_course_conflict/1`  
+  Two sessions of the same course cannot overlap.
+
+- `capacity_ok/1`  
+  The assigned room capacity must be at least the group size.
+
+- `equipment_ok/1`  
+  The room must provide the equipment required by the course.
+
+- `availability_ok/1`  
+  The instructor must be available for every occupied atomic slot.
+
+During recursive generation, each candidate assignment is checked against the partial schedule using `validate_insertion/2`. This gives early pruning: invalid partial schedules fail immediately instead of being filtered after full schedule construction.
+
+## Energy Model
+
+Each assignment consumes energy based on the room energy cost and the course duration:
+
+```text
+assignment_energy = course_duration x room_energy
+```
+
+Example:
+
+```text
+programming_101 duration = 2
+lab_alpha energy cost = 8
+assignment_energy = 2 x 8 = 16
+```
+
+Energy is accumulated by building and day using the state representation:
 
 ```prolog
-assign(Course, SessionIndex, Room, Time)
+energy(Building, Day, Value)
 ```
 
-The engine tries room and time combinations through Prolog backtracking.
+The predicates `update_energy_state/3` and `energy_ok/2` update this state during schedule construction. If a building/day energy threshold is exceeded, the candidate assignment fails immediately and Prolog backtracks.
 
-### 5. Constraint Checking
+## Optimization Model
 
-Each new assignment is checked before the search continues. The main validation predicate is:
+The optimization score is:
+
+```text
+Score = TotalEnergy + 10 x LoadImbalance + 5 x RoomUsageImbalance
+```
+
+Definitions:
+
+- `TotalEnergy`: total energy consumed by all assignments.
+- `LoadImbalance`: maximum daily energy minus minimum daily energy, considering days present in the schedule.
+- `RoomUsageImbalance`: maximum room usage count minus minimum room usage count, considering rooms present in the schedule.
+
+Lower score means a better schedule.
+
+The score combines three goals:
+
+- minimize global energy consumption,
+- avoid concentrating energy demand on a single day,
+- avoid unfair overuse of one room.
+
+## Branch and Bound Optimization
+
+The optimizer uses `best_solution/2` to store the best complete schedule found so far:
 
 ```prolog
-valid_partial(Schedule)
+best_solution(BestSchedule, BestScore)
 ```
 
-It enforces:
+Prolog backtracking explores valid schedules generated by `generate_schedule/1`. For each complete schedule, `score/2` computes the multi-criteria score. The predicate `update_best/2` replaces the current best solution only when a lower score is found.
 
-- `no_room_conflict/1`
-- `no_group_conflict/1`
-- `capacity_ok/1`
-- `equipment_ok/1`
-- `availability_ok/1`
+This Branch and Bound implementation avoids storing all schedules at once. The previous exhaustive `setof/3` version is still available as `best_schedule_exhaustive/2` for comparison.
 
-This means the system does not generate a full schedule and then filter it afterward. It prunes invalid choices immediately.
+Important limitation: the current bounding happens at complete-schedule level. It still evaluates complete schedules generated by `generate_schedule/1`. A stronger future version would integrate partial-score bounds into recursive schedule construction to prune partial branches earlier.
 
-### 6. Prolog Backtracking and Failure
+## How to Run
 
-The scheduler relies on Prolog search:
-
-- Prolog tries a possible assignment
-- if a constraint fails, Prolog backtracks
-- it then tries another room or time slot
-- if all possibilities fail, the predicate returns `false`
-
-This failure is meaningful. It indicates that no valid schedule exists under the current facts and constraints.
-
-## Installation / Setup
-
-### 1. Install SWI-Prolog
-
-Download and install SWI-Prolog:
-
-https://www.swi-prolog.org/
-
-### 2. Start Prolog
-
-Open a terminal in the project directory and run:
+Start SWI-Prolog in the project directory:
 
 ```bash
 swipl
 ```
 
-### 3. Load the project files
-
-Inside the Prolog REPL:
+Load the modules:
 
 ```prolog
 ?- [facts].
 ?- [constraints].
+?- [optimization].
+?- [main].
 ```
 
-You can also load both files in one command:
+Run the optimizer:
 
 ```prolog
-?- [facts, constraints].
+?- solve(Schedule, Score).
 ```
 
-## How to Run the System
+## Example Result
 
-The main query is:
+For the current dataset, an optimal score is:
 
 ```prolog
-?- generate_schedule(S).
+Score = 223.
 ```
 
-Behavior:
+The known score components are:
 
-- returns a schedule if one exists
-- returns `false` if the constraints are impossible to satisfy
+```text
+TotalEnergy = 58
+LoadImbalance = 16
+RoomUsageImbalance = 1
+```
 
-Example:
+Score calculation:
+
+```text
+Score = 58 + 10 x 16 + 5 x 1 = 223
+```
+
+An example solution is:
 
 ```prolog
-?- generate_schedule(S).
-S = [assign(...), assign(...), ...].
-```
-
-If no solution exists:
-
-```prolog
-?- generate_schedule(S).
-false.
-```
-
-```
-?- solve(S, Score).
-?- generate_schedule(S), total_energy(S, E).
-?- generate_schedule(S), load_imbalance(S, I).
-?- generate_schedule(S), room_usage_imbalance(S, R).
-?- setof(Score, S^(generate_schedule(S), score(S, Score)), Scores).
-```
-
-## Testing and Debugging
-
-This project is easiest to test directly from the Prolog REPL.
-
-### Test 1: Check that courses are loaded
-
-```prolog
-?- all_courses(C).
-```
-
-What it verifies:
-
-- the course facts are visible through the scheduling module
-- the engine can enumerate the courses it needs to schedule
-
-Typical result:
-
-```prolog
-C = [programming_101, calculus_1, physics_lab, database_systems].
-```
-
-### Test 2: Base case of course assignment
-
-```prolog
-?- assign_all_courses([], [], S).
-```
-
-What it verifies:
-
-- the recursion base case works correctly
-- an empty course list returns the current partial schedule unchanged
-
-Typical result:
-
-```prolog
-S = [].
-```
-
-### Test 3: Schedule one course with feasible constraints
-
-```prolog
-?- assign_all_courses([programming_101], [], S).
-```
-
-What it verifies:
-
-- recursive session assignment works
-- room selection works
-- instructor availability is respected
-- partial schedule validation succeeds for a satisfiable course
-
-Typical result:
-
-```prolog
-S = [
-  assign(programming_101, 2, lab_alpha, tuesday_08_10),
-  assign(programming_101, 1, lab_alpha, monday_08_10)
+Schedule = [
+  assign(physics_lab, 1, room_c105, tuesday_09_10,
+         [tuesday_09_10, tuesday_10_11, tuesday_11_12]),
+  assign(calculus_1, 1, room_b201, monday_10_11,
+         [monday_10_11]),
+  assign(programming_101, 2, lab_alpha, tuesday_08_09,
+         [tuesday_08_09, tuesday_09_10]),
+  assign(programming_101, 1, lab_alpha, monday_08_09,
+         [monday_08_09, monday_09_10])
 ].
 ```
 
-### Test 4: Detect failure for an unschedulable course
+Equivalent schedules may be returned if they have the same optimal score.
 
-```prolog
-?- assign_all_courses([calculus_1], [], S).
-```
+## Tests
 
-What it verifies:
+`TESTS.md` contains documented Prolog queries and expected outputs for:
 
-- the engine correctly fails when a course cannot be assigned
-- constraint failure propagates through the recursive scheduler
+- atomic timeslot facts,
+- `next_slot/2`,
+- multi-slot duration,
+- conflict detection,
+- assignment energy,
+- total energy,
+- score components,
+- Branch and Bound versus exhaustive optimization.
 
-Typical result:
+## Limitations
 
-```prolog
-false.
-```
+- The dataset is intentionally small.
+- Branch and Bound currently updates the best solution after complete schedules, not during partial recursive construction.
+- Equipment is modeled as a single required type.
+- There is no CSV or JSON import pipeline.
+- There is no graphical user interface.
+- Courses currently have one group and one required equipment type.
 
-### Trace-based debugging
+## Future Work
 
-To inspect the execution path:
-
-```prolog
-?- trace, generate_schedule(S).
-```
-
-What it helps with:
-
-- identifying where failure occurs
-- seeing which choices are tried first
-- understanding how backtracking explores alternatives
-
-This is the most useful debugging tool when the scheduler returns `false` unexpectedly.
-
-## Common Failure Cases
-
-If Prolog returns:
-
-```prolog
-false.
-```
-
-it means no valid schedule exists for the current dataset and constraints.
-
-Common reasons:
-
-- conflicting room assignments at the same time
-- two courses for the same student group at the same time
-- room capacity smaller than the group size
-- equipment mismatch between course and room
-- instructor unavailable at the chosen time
-- missing facts in `facts.pl`
-- too few compatible time slots
-- too few compatible rooms
-
-The system does not fail randomly. It fails because every candidate assignment eventually violates at least one constraint.
-
-## Example Output
-
-A successful schedule is a list of assignment terms:
-
-```prolog
-S = [
-  assign(programming_101, 2, lab_alpha, tuesday_08_10),
-  assign(programming_101, 1, lab_alpha, monday_08_10)
-].
-```
-
-Structure of each item:
-
-```prolog
-assign(Course, SessionNumber, Room, TimeSlot)
-```
-
-Meaning:
-
-- `Course`: the course identifier
-- `SessionNumber`: which session of the course is being scheduled
-- `Room`: the assigned room
-- `TimeSlot`: the assigned time slot
-
-## How to Extend the System
-
-### Add a new course
-
-In `facts.pl`, add a new `course/5` fact and ensure related facts exist:
-
-- a student group with `group_size/2`
-- an instructor with `teaches/2`
-- matching instructor availability with `availability/2`
-
-Example:
-
-```prolog
-course(ai_intro, 2, 2, group_d, projector).
-group_size(group_d, 20).
-teaches(dr_nadia, ai_intro).
-availability(dr_nadia, monday_10_12).
-availability(dr_nadia, tuesday_10_12).
-```
-
-### Add a new room
-
-In `facts.pl`, add a room with suitable capacity and equipment:
-
-```prolog
-room(room_d301, 50, projector, science_block, 6).
-```
-
-### Add a new time slot
-
-In `facts.pl`, add:
-
-```prolog
-timeslot(thursday_08_10).
-```
-
-### Modify constraints
-
-To change scheduling behavior, update `constraints.pl`.
-
-Examples:
-
-- add a new conflict rule
-- tighten availability rules
-- restrict certain courses to certain rooms
-
-When adding new constraints, keep them in separate predicates and include them in `valid_partial/1` so failure happens early.
-
-## Key Insight
-
-This project is a constraint satisfaction problem.
-
-The scheduler does not construct a timetable by optimization or guessing randomly. It builds a schedule incrementally, checks each partial assignment against the constraints, and backtracks whenever a violation occurs.
-
-If the system returns `false`, that is not a bug by itself. It means the current facts and constraints do not admit any valid schedule.
+- Integrate partial Branch and Bound into recursive schedule generation.
+- Test larger datasets.
+- Add a CSV/JSON knowledge base generator.
+- Support richer equipment requirements.
+- Support multiple groups per course.
+- Add instructor preferences and soft constraints.
