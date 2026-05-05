@@ -177,6 +177,14 @@ If no solution exists:
 false.
 ```
 
+```
+?- solve(S, Score).
+?- generate_schedule(S), total_energy(S, E).
+?- generate_schedule(S), load_imbalance(S, I).
+?- generate_schedule(S), room_usage_imbalance(S, R).
+?- setof(Score, S^(generate_schedule(S), score(S, Score)), Scores).
+```
+
 ## Testing and Debugging
 
 This project is easiest to test directly from the Prolog REPL.
