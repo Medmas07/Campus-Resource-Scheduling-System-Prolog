@@ -6,6 +6,7 @@ This project is a Prolog declarative reasoning engine that generates optimized w
 
 The system models scheduling as a Constraint Satisfaction Problem (CSP). Candidate schedules are built recursively, and invalid partial assignments are rejected as early as possible through Prolog failure and backtracking. The current implementation supports real multi-slot course durations, overlap-based conflict detection, energy-aware pruning, and multi-criteria optimization.
 
+![front](./assets/front.png)
 ## Architecture
 
 The project is organized into four Prolog modules:
