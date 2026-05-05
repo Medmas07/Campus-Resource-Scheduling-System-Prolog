@@ -6,6 +6,7 @@
     timeslot_day/2,
     update_energy_state/3,
     energy_ok/2,
+    assignment_energy/2,
     total_energy/2,
     no_same_course_time/2,
     no_room_conflict/1,
@@ -20,6 +21,7 @@
 :- use_module(facts, [
     all_courses/1,
     course_sessions/2,
+    course_duration/2,
     course_group/2,
     course_equipment/2,
     room_capacity/2,
@@ -102,6 +104,7 @@ availability_ok([assign(Course, _, _, Time) | Rest]) :-
 
 %   validates assignments for one course.
 %   assumptions: each SessionIndex appears only once in Schedule
+%   Internal debugging helper; generation already enforces session creation.
 course_assignments_ok(Course, Schedule) :-
     course_sessions(Course, Total),
     findall(SessionIndex, member(assign(Course, SessionIndex, _, _), Schedule), Sessions),
@@ -123,11 +126,12 @@ timeslot_day(Time, Time).
 
 %   State = list of energy(Building, Day, Value).
 %   Energy state structure: [energy(Building, Day, Value), ...].
-%   Updating adds the assignment's room energy to its building/day entry.
-update_energy_state(assign(_, _, Room, Time), State, NewState) :-
+%   Updating adds the full assignment energy to its building/day entry.
+update_energy_state(Assignment, State, NewState) :-
+    Assignment = assign(_, _, Room, Time),
     room_building(Room, Building),
     timeslot_day(Time, Day),
-    room_energy(Room, Cost),
+    assignment_energy(Assignment, Cost),
     update_energy_entry(Building, Day, Cost, State, NewState).
 
 update_energy_entry(Building, Day, Cost, [], [energy(Building, Day, Cost)]).
@@ -152,9 +156,15 @@ energy_used(Building, Day, State, UsedEnergy) :-
     !.
 energy_used(_, _, _, 0).
 
-total_energy([], 0).
-total_energy([assign(_, _, Room, _) | Rest], Total) :-
+%   Assignment energy includes course duration, so longer sessions cost more.
+assignment_energy(assign(Course, _, Room, _), Energy) :-
+    course_duration(Course, Duration),
     room_energy(Room, Cost),
+    Energy is Duration * Cost.
+
+total_energy([], 0).
+total_energy([Assignment | Rest], Total) :-
+    assignment_energy(Assignment, Cost),
     total_energy(Rest, RestTotal),
     Total is Cost + RestTotal.
 

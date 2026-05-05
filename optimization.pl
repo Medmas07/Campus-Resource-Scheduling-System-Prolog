@@ -8,9 +8,6 @@
 ]).
 
 :- use_module(constraints).
-:- use_module(facts, [
-    room_energy/2
-]).
 :- use_module(library(lists), [max_list/2, min_list/2]).
 
 % Score = total energy + load balancing penalty.
@@ -23,12 +20,13 @@ score(Schedule, Score) :-
 
 % Computes the energy consumed on one specific day.
 energy_per_day([], _Day, 0).
-energy_per_day([assign(_, _, Room, Time) | Rest], Day, Energy) :-
+energy_per_day([Assignment | Rest], Day, Energy) :-
+    Assignment = assign(_, _, _, Time),
     timeslot_day(Time, AssignmentDay),
     energy_per_day(Rest, Day, RestEnergy),
     (   AssignmentDay = Day
-    ->  room_energy(Room, RoomEnergy),
-        Energy is RoomEnergy + RestEnergy
+    ->  assignment_energy(Assignment, AssignmentEnergy),
+        Energy is AssignmentEnergy + RestEnergy
     ;   Energy = RestEnergy
     ).
 
@@ -60,6 +58,8 @@ scored_schedule(Schedule, Score) :-
 
 % setof sorts Score-Schedule pairs automatically.
 % The first result has the lowest score.
+% setof/3 performs exhaustive optimization over all valid schedules.
+% This is correct for the current small dataset; Branch and Bound would scale better.
 best_schedule(BestSchedule) :-
     setof(Score-Schedule,
           scored_schedule(Schedule, Score),

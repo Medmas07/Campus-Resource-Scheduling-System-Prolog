@@ -47,7 +47,8 @@ group_size(group_b, 35).
 group_size(group_c, 22).
 
 teaches(dr_sami,    programming_101 ).
-teaches(prof_anwer, database_systems).
+% database_systems is disabled in the small dataset, so its instructor facts stay disabled too.
+% teaches(prof_anwer, database_systems).
 teaches(dr_ali,     calculus_1      ).
 teaches(dr_skander, physics_lab     ).
 
@@ -57,8 +58,8 @@ availability(dr_ali    ,    monday_10_12).
 availability(dr_ali    , wednesday_14_16).
 availability(dr_skander,   tuesday_10_12).
 availability(dr_skander, wednesday_14_16).
-availability(prof_anwer,    monday_08_10).
-availability(prof_anwer,   tuesday_10_12).
+% availability(prof_anwer,    monday_08_10).
+% availability(prof_anwer,   tuesday_10_12).
 
 
 
